@@ -47,6 +47,32 @@ def ask_openai(prompt, max_tokens=600):
         return response.choices[0].message.content.strip()
     except Exception as e:
         return f"OpenAI API error: {e}"
+        
+# Function to analyze image using ChatGPT's vision capabilities
+def analyze_image(image_path):
+    with open(image_path, "rb") as image_file:
+        image_data = image_file.read()
+
+    response = openai.ChatCompletion.create(
+        model="gpt-4",
+        messages=[
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": "Please analyze the following image."},
+        ],
+        files=[
+            {
+                "file": ("image.png", io.BytesIO(image_data), "image/png"),
+                "purpose": "answers",
+            }
+        ]
+    )
+
+    return response['choices'][0]['message']['content']
+
+# Example usage
+image_path = 'path_to_your_image.png'
+analysis = analyze_image(image_path)
+print(analysis)
 
 def speak_text(text):
     tts = gTTS(text)
