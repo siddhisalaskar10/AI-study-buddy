@@ -7,4 +7,3 @@ speechrecognition
 pydub
 json5
 google-api-python-client
-easyocr
