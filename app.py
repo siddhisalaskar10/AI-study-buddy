@@ -144,20 +144,17 @@ elif menu=="📝 Quiz":
 
 # --------------- SCAN PHOTO ---------------
 elif menu=="📸 Scan Photo":
-    up=st.file_uploader("Upload an image",type=["jpg","png","jpeg"])
+    up = st.file_uploader("Upload an image", type=["jpg","png","jpeg"])
     if up:
-        img=Image.open(up)
-        st.image(img,width=300)
-        if TESSERACT_AVAILABLE:
-            try:
-                text=pytesseract.image_to_string(img)
-            except Exception as e:
-                text=f"OCR error: {e}"
-        else:
-            text="⚠️ pytesseract or Tesseract OCR not available. Use OpenAI Vision API instead."
-        st.text_area("Extracted text:",text,height=100)
+        img = Image.open(up)
+        st.image(img, width=300)
+        try:
+            text = pytesseract.image_to_string(img)
+        except Exception as e:
+            text = f"OCR error: {e}"
+        st.text_area("Extracted text:", text, height=100)
         if st.button("Solve / Explain"):
-            ans=ask_openai(f"Explain or solve this: {text}")
+            ans = ask_openai(f"Explain or solve this: {text}")
             st.write(ans)
             st.audio(speak_text(ans))
 
