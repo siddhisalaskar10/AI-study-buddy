@@ -1,7 +1,8 @@
 streamlit
 openai
 google-api-python-client
-pillow
+pytesseract
+Pillow
 gTTS
 SpeechRecognition
 pydub
