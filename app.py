@@ -137,14 +137,22 @@ elif menu=="📸 Scan Photo":
         img = Image.open(up)
         st.image(img, width=300)
 
-        # Convert uploaded image to base64
+        # Convert image to base64
         img_bytes = up.read()
         img_b64 = base64.b64encode(img_bytes).decode()
 
+        # Compress image if large (optional)
+        if len(img_bytes) > 1000000:  # >1MB
+            img = img.resize((800, int(800 * img.height / img.width)))
+            buffer = io.BytesIO()
+            img.save(buffer, format="PNG")
+            img_b64 = base64.b64encode(buffer.getvalue()).decode()
+
         prompt = f"""
-You are an AI assistant. Extract all the text from the following image (base64 encoded):
+You are an AI assistant. Extract all the text from the following base64-encoded image.
+Return ONLY the extracted text, without any explanations or extra comments.
+Base64 image:
 {img_b64}
-Return only the extracted text without explanations.
 """
 
         try:
