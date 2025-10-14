@@ -1,7 +1,6 @@
 import streamlit as st
 from openai import OpenAI
 import os, json5, tempfile, re, io, base64
-import easyocr
 from googleapiclient.discovery import build
 from PIL import Image
 from gtts import gTTS
@@ -138,16 +137,42 @@ elif menu=="📸 Scan Photo":
         img = Image.open(up)
         st.image(img, width=300)
 
-        reader = easyocr.Reader(['en'], gpu=False)  # Load English OCR
-        results = reader.readtext(np.array(img))
+        # Convert image to base64
+        img_bytes = up.read()
+        img_b64 = base64.b64encode(img_bytes).decode()
 
-        text = "\n".join([res[1] for res in results])
-        st.text_area("Extracted text:", text, height=200)
+        # Compress image if large (optional)
+        if len(img_bytes) > 1000000:  # >1MB
+            img = img.resize((800, int(800 * img.height / img.width)))
+            buffer = io.BytesIO()
+            img.save(buffer, format="PNG")
+            img_b64 = base64.b64encode(buffer.getvalue()).decode()
 
-        if st.button("Solve / Explain"):
-            ans = ask_openai(f"Explain or solve this: {text}")
-            st.write(ans)
-            st.audio(speak_text(ans))
+        prompt = f"""
+You are an AI assistant. Extract all the text from the following base64-encoded image.
+Return ONLY the extracted text, without any explanations or extra comments.
+Base64 image:
+{img_b64}
+"""
+
+        try:
+            response = openai.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": "You are an AI that extracts text from images."},
+                    {"role": "user", "content": prompt}
+                ]
+            )
+            text = response.choices[0].message.content.strip()
+            st.text_area("Extracted text:", text, height=100)
+
+            if st.button("Solve / Explain"):
+                ans = ask_openai(f"Explain or solve this: {text}")
+                st.write(ans)
+                st.audio(speak_text(ans))
+
+        except Exception as e:
+            st.error(f"OCR / OpenAI error: {e}")
 
 # --------------- FLASHCARDS ---------------
 elif menu=="💡 Flashcards":
