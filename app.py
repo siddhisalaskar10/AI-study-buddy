@@ -1,7 +1,6 @@
 import streamlit as st
 from openai import OpenAI
-import os,
-import json5, tempfile
+import os, json5, tempfile
 import re
 from googleapiclient.discovery import build
 import pytesseract
