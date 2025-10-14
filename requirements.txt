@@ -1,0 +1,7 @@
+streamlit
+openai
+google-api-python-client
+pillow
+gTTS
+SpeechRecognition
+pydub
