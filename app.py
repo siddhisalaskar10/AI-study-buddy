@@ -8,8 +8,8 @@ import speech_recognition as sr
 from pydub import AudioSegment
 
 # --------------- CONFIG ---------------
-openai.api_key = "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"
-YOUTUBE_API_KEY = "AIzaSyAXfo_sn1JbTGYK6cpzfFz2jJZaeBPgPKY"
+openai.api_key = "OPENAI_API_KEY"
+YOUTUBE_API_KEY = "YOUTUBE_API_KEY"
 
 # --------------- UTILITIES ---------------
 def ask_openai(prompt, max_tokens=600):
