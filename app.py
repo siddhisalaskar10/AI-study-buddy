@@ -14,6 +14,10 @@ try:
     TESSERACT_AVAILABLE = True
 except ImportError:
     TESSERACT_AVAILABLE = False
+   
+# If pytesseract is available, set the Tesseract executable path
+if TESSERACT_AVAILABLE:
+    pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
 # --------------- CONFIG ---------------
 api_key = os.getenv("OPENAI_API_KEY")
