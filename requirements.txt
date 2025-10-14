@@ -6,3 +6,4 @@ Pillow
 gTTS
 SpeechRecognition
 pydub
+json5
