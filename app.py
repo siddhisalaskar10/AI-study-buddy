@@ -1,6 +1,6 @@
 import streamlit as st
 from openai import OpenAI
-import os, json5, tempfile, re, io
+import os, json5, tempfile, re, io, base64
 from googleapiclient.discovery import build
 from PIL import Image
 from gtts import gTTS
@@ -137,20 +137,22 @@ elif menu=="📸 Scan Photo":
         img = Image.open(up)
         st.image(img, width=300)
 
+        # Convert uploaded image to base64
         img_bytes = up.read()
+        img_b64 = base64.b64encode(img_bytes).decode()
+
+        prompt = f"""
+You are an AI assistant. Extract all the text from the following image (base64 encoded):
+{img_b64}
+Return only the extracted text without explanations.
+"""
 
         try:
             response = openai.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[
                     {"role": "system", "content": "You are an AI that extracts text from images."},
-                    {"role": "user", "content": "Extract all text from this image."}
-                ],
-                files=[
-                    {
-                        "file": ("image.png", io.BytesIO(img_bytes), "image/png"),
-                        "purpose": "answers"
-                    }
+                    {"role": "user", "content": prompt}
                 ]
             )
             text = response.choices[0].message.content.strip()
