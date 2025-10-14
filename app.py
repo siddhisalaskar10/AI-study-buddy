@@ -1,5 +1,6 @@
 import streamlit as st
-import openai, os, json, tempfile
+from openai import OpenAI
+import os, json, tempfile
 from googleapiclient.discovery import build
 import pytesseract
 from PIL import Image
@@ -8,7 +9,9 @@ import speech_recognition as sr
 from pydub import AudioSegment
 
 # --------------- CONFIG ---------------
-openai.api_key = "OPENAI_API_KEY"
+api_key = os.getenv("OPENAI_API_KEY")
+
+openai = OpenAI(api_key=api_key)
 YOUTUBE_API_KEY = "YOUTUBE_API_KEY"
 
 # --------------- UTILITIES ---------------
