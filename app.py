@@ -3,33 +3,46 @@ from openai import OpenAI
 import os, json5, tempfile
 import re
 from googleapiclient.discovery import build
-import pytesseract
 from PIL import Image
 from gtts import gTTS
 import speech_recognition as sr
 from pydub import AudioSegment
 
+# Optional: Only import pytesseract if Tesseract is available
+try:
+    import pytesseract
+    TESSERACT_AVAILABLE = True
+except ImportError:
+    TESSERACT_AVAILABLE = False
+
 # --------------- CONFIG ---------------
 api_key = os.getenv("OPENAI_API_KEY")
-
+if not api_key:
+    st.error("⚠️ OpenAI API key is missing. Set OPENAI_API_KEY as environment variable.")
 openai = OpenAI(api_key=api_key)
-YOUTUBE_API_KEY = "YOUTUBE_API_KEY"
+
+YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY", "YOUR_KEY_HERE")
 
 # --------------- UTILITIES ---------------
 def ask_openai(prompt, max_tokens=600):
+    if not api_key:
+        return "OpenAI API key not set."
     profile = st.session_state.get("user_profile", {})
     profile_context = ""
     if profile:
         profile_context = f"The user is {profile.get('name','a student')} in grade {profile.get('grade','unknown')}, studying {profile.get('subjects','many subjects')} and wants {profile.get('goal','to learn better')}.\n\n"
-    response = openai.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role":"system","content":"You are a friendly AI Study Buddy who explains concepts clearly."},
-            {"role":"user","content": profile_context + prompt}
-        ],
-        max_tokens=max_tokens
-    )
-    return response.choices[0].message.content.strip()
+    try:
+        response = openai.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role":"system","content":"You are a friendly AI Study Buddy who explains concepts clearly."},
+                {"role":"user","content": profile_context + prompt}
+            ],
+            max_tokens=max_tokens
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        return f"OpenAI API error: {e}"
 
 def speak_text(text):
     tts = gTTS(text)
@@ -41,20 +54,19 @@ def generate_quiz(topic, n=5):
     prompt = (
         f"Create {n} multiple-choice questions about {topic}. "
         "Return ONLY valid JSON like this:\n"
-        "{'questions':[{'question':'...','options':['A','B','C','D'],'answer_index':0}]}\n"
+        '{"questions":[{"question":"...","options":["A","B","C","D"],"answer_index":0}]}\n'
         "Do not include explanations or any extra text outside JSON."
     )
 
     try:
         raw = ask_openai(prompt)
 
-        # 🧠 Try to extract JSON-like content from model reply
+        # 🧠 Extract JSON-like content safely
         json_match = re.search(r'\{.*\}', raw, re.DOTALL)
         if not json_match:
             raise ValueError("No JSON found in response.")
-
         json_text = json_match.group(0)
-        quiz_data = json.loads(json_text.replace("'", '"'))  # Convert single quotes to double quotes
+        quiz_data = json5.loads(json_text)  # more forgiving than json.loads
         return quiz_data
 
     except Exception as e:
@@ -62,9 +74,10 @@ def generate_quiz(topic, n=5):
         st.write("Raw model reply for debugging:", raw)
         return {"questions": []}
 
-
-
 def youtube_search(q):
+    if not YOUTUBE_API_KEY:
+        st.warning("⚠️ YouTube API key not set.")
+        return []
     try:
         yt = build("youtube","v3",developerKey=YOUTUBE_API_KEY)
         res = yt.search().list(q=q,part="snippet",maxResults=5,type="video").execute()
@@ -76,7 +89,8 @@ def youtube_search(q):
                 "thumb": f"https://img.youtube.com/vi/{i['id']['videoId']}/0.jpg"
             })
         return vids
-    except Exception:
+    except Exception as e:
+        st.warning(f"YouTube API error: {e}")
         return []
 
 # --------------- UI SETUP ---------------
@@ -117,7 +131,6 @@ elif menu=="📝 Quiz":
             st.success("Quiz ready!")
     if "quiz" in st.session_state:
         qlist=st.session_state.quiz
-        score=0
         for i,q in enumerate(qlist):
             st.markdown(f"**Q{i+1}. {q['question']}**")
             ans=st.radio("",q["options"],key=f"q{i}")
@@ -131,11 +144,17 @@ elif menu=="📝 Quiz":
 
 # --------------- SCAN PHOTO ---------------
 elif menu=="📸 Scan Photo":
-    up=st.file_uploader("Upload an image question",type=["jpg","png","jpeg"])
+    up=st.file_uploader("Upload an image",type=["jpg","png","jpeg"])
     if up:
         img=Image.open(up)
         st.image(img,width=300)
-        text=pytesseract.image_to_string(img)
+        if TESSERACT_AVAILABLE:
+            try:
+                text=pytesseract.image_to_string(img)
+            except Exception as e:
+                text=f"OCR error: {e}"
+        else:
+            text="⚠️ pytesseract or Tesseract OCR not available. Use OpenAI Vision API instead."
         st.text_area("Extracted text:",text,height=100)
         if st.button("Solve / Explain"):
             ans=ask_openai(f"Explain or solve this: {text}")
@@ -177,15 +196,15 @@ elif menu=="🎧 Voice Assistant":
     st.header("🎧 Talk to your AI Study Buddy")
     file=st.file_uploader("Upload voice (.wav/.mp3):",type=["wav","mp3"])
     if file:
-        sound=AudioSegment.from_file(file)
-        tmp=tempfile.NamedTemporaryFile(delete=False,suffix=".wav")
-        sound.export(tmp.name,format="wav")
-        r=sr.Recognizer()
-        with sr.AudioFile(tmp.name) as src: audio=r.record(src)
         try:
+            sound=AudioSegment.from_file(file)
+            tmp=tempfile.NamedTemporaryFile(delete=False,suffix=".wav")
+            sound.export(tmp.name,format="wav")
+            r=sr.Recognizer()
+            with sr.AudioFile(tmp.name) as src: audio=r.record(src)
             q=r.recognize_google(audio)
             st.write(f"🗣 You said: {q}")
             ans=ask_openai(q)
             st.write("🤖",ans)
             st.audio(speak_text(ans))
-        except Exception as e: st.error(f"Voice error: {e}")
+        except Exception as e: st.error(f"Voice processing error: {e}")
