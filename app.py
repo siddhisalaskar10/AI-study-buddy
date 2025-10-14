@@ -152,11 +152,18 @@ elif menu=="📸 Scan Photo":
     if up:
         img = Image.open(up)
         st.image(img, width=300)
-        try:
-            text = pytesseract.image_to_string(img)
-        except Exception as e:
-            text = f"OCR error: {e}"
+
+        img_bytes = up.read()
+
+        # Use OpenAI Vision for OCR
+        response = openai.images.analyze(
+            model="gpt-4o-mini",
+            image=img_bytes,
+            tasks=["text-recognition"]
+        )
+        text = response.data[0].text
         st.text_area("Extracted text:", text, height=100)
+
         if st.button("Solve / Explain"):
             ans = ask_openai(f"Explain or solve this: {text}")
             st.write(ans)
