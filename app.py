@@ -1,6 +1,8 @@
 import streamlit as st
 from openai import OpenAI
-import os, json, tempfile
+import os,
+import json5, tempfile
+import re
 from googleapiclient.discovery import build
 import pytesseract
 from PIL import Image
@@ -35,9 +37,6 @@ def speak_text(text):
     path = "tts.mp3"
     tts.save(path)
     return path
-
-import json
-import re
 
 def generate_quiz(topic, n=5):
     prompt = (
