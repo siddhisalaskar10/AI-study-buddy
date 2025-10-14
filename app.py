@@ -1,23 +1,11 @@
 import streamlit as st
 from openai import OpenAI
-import os, json5, tempfile
-import re
+import os, json5, tempfile, re, io
 from googleapiclient.discovery import build
 from PIL import Image
 from gtts import gTTS
 import speech_recognition as sr
 from pydub import AudioSegment
-
-# Optional: Only import pytesseract if Tesseract is available
-try:
-    import pytesseract
-    TESSERACT_AVAILABLE = True
-except ImportError:
-    TESSERACT_AVAILABLE = False
-   
-# If pytesseract is available, set the Tesseract executable path
-if TESSERACT_AVAILABLE:
-    pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR"
 
 # --------------- CONFIG ---------------
 api_key = os.getenv("OPENAI_API_KEY")
@@ -47,32 +35,6 @@ def ask_openai(prompt, max_tokens=600):
         return response.choices[0].message.content.strip()
     except Exception as e:
         return f"OpenAI API error: {e}"
-        
-# Function to analyze image using ChatGPT's vision capabilities
-def analyze_image(image_path):
-    with open(image_path, "rb") as image_file:
-        image_data = image_file.read()
-
-    response = openai.ChatCompletion.create(
-        model="gpt-4",
-        messages=[
-            {"role": "system", "content": "You are a helpful assistant."},
-            {"role": "user", "content": "Please analyze the following image."},
-        ],
-        files=[
-            {
-                "file": ("image.png", io.BytesIO(image_data), "image/png"),
-                "purpose": "answers",
-            }
-        ]
-    )
-
-    return response['choices'][0]['message']['content']
-
-# Example usage
-image_path = 'path_to_your_image.png'
-analysis = analyze_image(image_path)
-print(analysis)
 
 def speak_text(text):
     tts = gTTS(text)
@@ -87,25 +49,21 @@ def generate_quiz(topic, n=5):
         '{"questions":[{"question":"...","options":["A","B","C","D"],"answer_index":0}]}\n'
         "Do not include explanations or any extra text outside JSON."
     )
-
     try:
         raw = ask_openai(prompt)
-
-        # 🧠 Extract JSON-like content safely
         json_match = re.search(r'\{.*\}', raw, re.DOTALL)
         if not json_match:
             raise ValueError("No JSON found in response.")
         json_text = json_match.group(0)
-        quiz_data = json5.loads(json_text)  # more forgiving than json.loads
+        quiz_data = json5.loads(json_text)
         return quiz_data
-
     except Exception as e:
         st.error(f"⚠️ Quiz parse error: {e}")
         st.write("Raw model reply for debugging:", raw)
         return {"questions": []}
 
 def youtube_search(q):
-    if not YOUTUBE_API_KEY:
+    if not YOUTUBE_API_KEY or YOUTUBE_API_KEY=="YOUR_KEY_HERE":
         st.warning("⚠️ YouTube API key not set.")
         return []
     try:
@@ -172,7 +130,7 @@ elif menu=="📝 Quiz":
                     st.error(f"❌ Correct answer: {correct}")
                     st.audio(speak_text(f"The correct answer is {correct}"))
 
-# --------------- SCAN PHOTO ---------------
+# --------------- SCAN PHOTO (without Tesseract) ---------------
 elif menu=="📸 Scan Photo":
     up = st.file_uploader("Upload an image", type=["jpg","png","jpeg"])
     if up:
@@ -181,19 +139,30 @@ elif menu=="📸 Scan Photo":
 
         img_bytes = up.read()
 
-        # Use OpenAI Vision for OCR
-        response = openai.images.analyze(
-            model="gpt-4o-mini",
-            image=img_bytes,
-            tasks=["text-recognition"]
-        )
-        text = response.data[0].text
-        st.text_area("Extracted text:", text, height=100)
+        try:
+            response = openai.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": "You are an AI that extracts text from images."},
+                    {"role": "user", "content": "Extract all text from this image."}
+                ],
+                files=[
+                    {
+                        "file": ("image.png", io.BytesIO(img_bytes), "image/png"),
+                        "purpose": "answers"
+                    }
+                ]
+            )
+            text = response.choices[0].message.content.strip()
+            st.text_area("Extracted text:", text, height=100)
 
-        if st.button("Solve / Explain"):
-            ans = ask_openai(f"Explain or solve this: {text}")
-            st.write(ans)
-            st.audio(speak_text(ans))
+            if st.button("Solve / Explain"):
+                ans = ask_openai(f"Explain or solve this: {text}")
+                st.write(ans)
+                st.audio(speak_text(ans))
+
+        except Exception as e:
+            st.error(f"OCR / OpenAI error: {e}")
 
 # --------------- FLASHCARDS ---------------
 elif menu=="💡 Flashcards":
@@ -230,15 +199,15 @@ elif menu=="🎧 Voice Assistant":
     st.header("🎧 Talk to your AI Study Buddy")
     file=st.file_uploader("Upload voice (.wav/.mp3):",type=["wav","mp3"])
     if file:
+        sound=AudioSegment.from_file(file)
+        tmp=tempfile.NamedTemporaryFile(delete=False,suffix=".wav")
+        sound.export(tmp.name,format="wav")
+        r=sr.Recognizer()
+        with sr.AudioFile(tmp.name) as src: audio=r.record(src)
         try:
-            sound=AudioSegment.from_file(file)
-            tmp=tempfile.NamedTemporaryFile(delete=False,suffix=".wav")
-            sound.export(tmp.name,format="wav")
-            r=sr.Recognizer()
-            with sr.AudioFile(tmp.name) as src: audio=r.record(src)
             q=r.recognize_google(audio)
             st.write(f"🗣 You said: {q}")
             ans=ask_openai(q)
             st.write("🤖",ans)
             st.audio(speak_text(ans))
-        except Exception as e: st.error(f"Voice processing error: {e}")
+        except Exception as e: st.error(f"Voice error: {e}")
