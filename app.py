@@ -101,6 +101,7 @@ if menu=="👤 Profile":
 
 # --------------- EXPLAIN TOPIC ---------------
 elif menu=="🧠 Explain Topic":
+    st.header("🧠 Explain Topic")
     topic=st.text_input("Enter a topic:")
     if st.button("Explain"):
         ans=ask_openai(f"Explain {topic} simply with examples.")
@@ -109,6 +110,7 @@ elif menu=="🧠 Explain Topic":
 
 # --------------- QUIZ ---------------
 elif menu=="📝 Quiz":
+    st.header("📝 Quiz")
     topic=st.text_input("Topic for quiz:")
     n=st.slider("Number of questions",1,10,5)
     if st.button("Generate Quiz"):
@@ -130,52 +132,51 @@ elif menu=="📝 Quiz":
                     st.error(f"❌ Correct answer: {correct}")
                     st.audio(speak_text(f"The correct answer is {correct}"))
 
-# --------------- SCAN PHOTO (without Tesseract) ---------------
+# ----------------- 📸 SCAN PHOTO (AI OCR + Summarize) -----------------
 elif menu=="📸 Scan Photo":
-    up = st.file_uploader("Upload an image", type=["jpg","png","jpeg"])
+    st.subheader("📸 Scan Photo")
+    up = st.file_uploader("Upload an image (notes, book page, or document):", type=["jpg", "png", "jpeg"])
+
     if up:
+        # Display uploaded image
         img = Image.open(up)
-        st.image(img, width=300)
+        st.image(img, caption="Uploaded Image", use_container_width=True)
 
-        # Convert image to base64
-        img_bytes = up.read()
-        img_b64 = base64.b64encode(img_bytes).decode()
+        # Convert image to base64 for API
+        img_bytes = io.BytesIO()
+        img.save(img_bytes, format="PNG")
+        img_b64 = base64.b64encode(img_bytes.getvalue()).decode()
 
-        # Compress image if large (optional)
-        if len(img_bytes) > 1000000:  # >1MB
-            img = img.resize((800, int(800 * img.height / img.width)))
-            buffer = io.BytesIO()
-            img.save(buffer, format="PNG")
-            img_b64 = base64.b64encode(buffer.getvalue()).decode()
+        # Build prompt for text extraction
+        extract_prompt = f"""
+        You are an OCR AI. Read the following base64-encoded image carefully.
+        Extract all text accurately and return ONLY the text — no comments, no formatting.
+        Base64 image:
+        {img_b64}
+        """
 
-        prompt = f"""
-You are an AI assistant. Extract all the text from the following base64-encoded image.
-Return ONLY the extracted text, without any explanations or extra comments.
-Base64 image:
-{img_b64}
-"""
+        with st.spinner("🔍 Extracting text from image..."):
+            extracted_text = ask_openai(extract_prompt)
 
-        try:
-            response = openai.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": "You are an AI that extracts text from images."},
-                    {"role": "user", "content": prompt}
-                ]
-            )
-            text = response.choices[0].message.content.strip()
-            st.text_area("Extracted text:", text, height=100)
+        if extracted_text and not extracted_text.startswith("⚠️"):
+            st.text_area("📝 Extracted Text:", extracted_text, height=200)
 
-            if st.button("Solve / Explain"):
-                ans = ask_openai(f"Explain or solve this: {text}")
-                st.write(ans)
-                st.audio(speak_text(ans))
+            if st.button("✨ Summarize or Explain Text"):
+                with st.spinner("🧠 Summarizing content..."):
+                    summary_prompt = f"Summarize and explain the following text clearly:\n\n{extracted_text}"
+                    summary = ask_openai(summary_prompt)
+                    st.markdown("### 📘 Summary / Explanation")
+                    st.write(summary)
 
-        except Exception as e:
-            st.error(f"OCR / OpenAI error: {e}")
+                    # Optional: Text-to-speech (if speak_text function available)
+                    if 'speak_text' in globals():
+                        st.audio(speak_text(summary))
+        else:
+            st.warning("⚠️ Could not extract text. Try another image or check image clarity.")
 
 # --------------- FLASHCARDS ---------------
 elif menu=="💡 Flashcards":
+    st.header("💡 Flashcards")
     topic=st.text_input("Topic:")
     n=st.slider("How many flashcards?",1,10,5)
     if st.button("Generate Flashcards"):
@@ -184,6 +185,7 @@ elif menu=="💡 Flashcards":
 
 # --------------- YOUTUBE ---------------
 elif menu=="🎥 YouTube":
+    st.header("🎥 YouTube")
     q=st.text_input("Search topic:")
     if st.button("Find"):
         vids=youtube_search(q)
@@ -195,6 +197,7 @@ elif menu=="🎥 YouTube":
 
 # --------------- NOTES ---------------
 elif menu=="🗒️ Notes":
+    st.header("🗒️ Your notes")
     note=st.text_area("Write your note:")
     if st.button("Save Note"):
         with open("notes.txt","a",encoding="utf-8") as f: f.write(note+"\n---\n")
