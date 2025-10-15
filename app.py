@@ -2,7 +2,7 @@ import streamlit as st
 from openai import OpenAI
 import google.generativeai as genai
 from groq import Groq
-import os, time, json5, tempfile, re, io, base64
+import os, time, json5, tempfile, re, io, base64, random
 from googleapiclient.discovery import build
 from PIL import Image
 import pytesseract
