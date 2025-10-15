@@ -183,42 +183,39 @@ elif menu=="📝 Quiz":
                     st.error(f"❌ Correct answer: {correct}")
                     st.audio(speak_text(f"The correct answer is {correct}"))
 
-# ----------------- SCAN PHOTO (OCR + Summarizer) -----------------
+# --------------- SCAN PHOTO ---------------
 elif menu=="📸 Scan Photo":
     st.subheader("📸 Scan and Summarize Notes")
 
     up = st.file_uploader("Upload an image", type=["jpg", "jpeg", "png"])
     if up:
-        # --- Load and preview image ---
+        # --- Load image ---
         img = Image.open(up)
         st.image(img, caption="Uploaded Image", width=350)
 
-       try:
-    # Try Tesseract first
-    text = pytesseract.image_to_string(img)
-except pytesseract.TesseractNotFoundError:
-    st.warning("⚠️ Tesseract not found. Using GPT-based OCR fallback...")
-    import io, base64
-    img_bytes = io.BytesIO()
-    img.save(img_bytes, format="PNG")
-    img_b64 = base64.b64encode(img_bytes.getvalue()).decode()
-    prompt = f"Extract all text from this base64 image:\n{img_b64}"
-    text = ask_ai(prompt)
+        try:
+            # --- Try local Tesseract OCR ---
+            import pytesseract
+            pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+            text = pytesseract.image_to_string(img)
+        except (pytesseract.TesseractNotFoundError, NameError):
+            st.warning("⚠️ Tesseract not found. Using GPT-based OCR fallback...")
+            import io, base64
+            img_bytes = io.BytesIO()
+            img.save(img_bytes, format="PNG")
+            img_b64 = base64.b64encode(img_bytes.getvalue()).decode()
+            prompt = f"Extract all text from this base64 image:\n{img_b64}"
+            text = ask_ai(prompt)
 
-        # --- Summarization / Explanation ---
-        if text.strip():
-            if st.button("✨ Summarize / Explain"):
-                with st.spinner("🧠 Summarizing the extracted content..."):
-                    # truncate long text to avoid token issues
-                    text_to_summarize = text[:4000]
-                    summary = ask_ai(f"Summarize or explain this text in simple terms:\n{text_to_summarize}")
-                    
-                    st.write("### 📘 Summary / Explanation:")
-                    st.write(summary)
+        # --- Show extracted text ---
+        st.text_area("📝 Extracted Text:", text, height=180)
 
-                    # --- Audio output ---
-                    audio_path = speak_text(summary)
-                    st.audio(audio_path)
+        # --- Summarize / Explain ---
+        if st.button("✨ Summarize / Explain"):
+            summary = ask_ai(f"Summarize or explain this text in simple terms:\n{text}")
+            st.write("### 📘 Summary / Explanation:")
+            st.write(summary)
+            st.audio(speak_text(summary))
 
 # --------------- FLASHCARDS ---------------
 elif menu=="💡 Flashcards":
