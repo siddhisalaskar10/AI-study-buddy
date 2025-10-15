@@ -7,6 +7,9 @@ from gtts import gTTS
 import speech_recognition as sr
 from pydub import AudioSegment
 
+# ✅ Initialize OpenAI client (safe for both local and deployed apps)
+client = OpenAI(api_key=st.secrets.get("OPENAI_API_KEY", os.getenv("OPENAI_API_KEY")))
+
 # --------------- CONFIG ---------------
 api_key = os.getenv("OPENAI_API_KEY")
 if not api_key:
