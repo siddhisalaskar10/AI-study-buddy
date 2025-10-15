@@ -135,44 +135,64 @@ elif menu=="📝 Quiz":
                     st.error(f"❌ Correct answer: {correct}")
                     st.audio(speak_text(f"The correct answer is {correct}"))
 
-# ----------------- 📸 SCAN PHOTO (AI OCR + Summarize) -----------------
+# ----------------- SCAN PHOTO (with GPT-based OCR + Summarizer) -----------------
 elif menu=="📸 Scan Photo":
-    st.subheader("📸 Scan Photo (AI OCR + Summarize)")
-    up = st.file_uploader("Upload an image (notes, document, or textbook page):", type=["jpg", "png", "jpeg"])
+    st.subheader("📸 Scan and Summarize Notes")
 
+    up = st.file_uploader("Upload an image", type=["jpg", "jpeg", "png"])
     if up:
-        # Display uploaded image
+        # --- Load and preview image ---
         img = Image.open(up)
-        st.image(img, caption="Uploaded Image", use_container_width=True)
+        st.image(img, caption="Uploaded Image", width=350)
 
+        # --- Read image bytes ---
+        img_bytes = up.read()
+
+        # --- Compress if too large (>1 MB) ---
+        if len(img_bytes) > 1_000_000:
+            img = img.resize((800, int(800 * img.height / img.width)))
+            buffer = io.BytesIO()
+            img.save(buffer, format="PNG")
+            img_bytes = buffer.getvalue()
+
+        # --- Convert to Base64 for GPT processing ---
+        img_b64 = base64.b64encode(img_bytes).decode()
+
+        # --- Prepare prompt ---
+        prompt = f"""
+        You are an AI assistant that extracts readable text from an image (OCR).
+        Below is the image encoded in Base64. Extract all visible text clearly and accurately.
+        Return only the extracted text — no explanations, no formatting, no markdown.
+
+        Base64 image:
+        {img_b64}
+        """
+
+        # --- Process image using GPT-3.5 (more affordable & stable) ---
         try:
-            # Use OpenAI Vision model directly
-            st.info("🔍 Extracting text using GPT-4o-mini (Vision)...")
-            response = client.chat.completions.create(
-                model="gpt-4o-mini",  # Vision model
-                messages=[
-                    {"role": "system", "content": "You are an OCR AI that extracts text and summarizes content."},
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": "Extract all text from this image. Return only text."},
-                            {"type": "image", "image": up.getvalue()},
-                        ],
-                    },
-                ],
-            )
+            with st.spinner("🔍 Extracting text from image..."):
+                response = client.chat.completions.create(
+                    model="gpt-3.5-turbo",
+                    messages=[
+                        {"role": "system", "content": "You are an AI that extracts and summarizes text from images."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    max_tokens=1500,
+                )
 
-            extracted_text = response.choices[0].message.content.strip()
-            st.text_area("📝 Extracted Text:", extracted_text, height=200)
+            # --- Extracted text ---
+            text = response.choices[0].message.content.strip()
+            st.text_area("📝 Extracted Text:", text, height=180)
 
-            if st.button("✨ Summarize or Explain Text"):
-                with st.spinner("🧠 Summarizing content..."):
-                    summary_prompt = f"Summarize and explain the following text clearly:\n\n{extracted_text}"
-                    summary = ask_openai(summary_prompt)
-                    st.markdown("### 📘 Summary / Explanation")
+            # --- Summarization / Explanation ---
+            if st.button("✨ Summarize / Explain"):
+                with st.spinner("🧠 Summarizing the extracted content..."):
+                    summary = ask_openai(f"Summarize or explain this text in simple terms:\n{text}")
+                    st.write("### 📘 Summary / Explanation:")
                     st.write(summary)
-                    if 'speak_text' in globals():
-                        st.audio(speak_text(summary))
+
+                    # --- Optional: Audio output ---
+                    st.audio(speak_text(summary))
 
         except Exception as e:
             st.error(f"⚠️ OpenAI API error: {e}")
