@@ -55,7 +55,7 @@ def ask_ai(prompt, max_tokens=600):
     # Try Groq (Llama 3, free tier)
     try:
         completion = groq_client.chat.completions.create(
-            model="llama3-8b-8192",
+            model="llama-3.1-8b-instant",
             messages=[{"role": "user", "content": prompt}]
         )
         return completion.choices[0].message.content.strip()
