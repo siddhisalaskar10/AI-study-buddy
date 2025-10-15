@@ -7,3 +7,5 @@ speechrecognition
 pydub
 json5
 google-api-python-client
+google-generativeai
+groq
