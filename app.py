@@ -216,7 +216,7 @@ elif menu=="📸 Scan Photo":
         # --- Process image using GPT-3.5 (more affordable & stable) ---
         try:
             with st.spinner("🔍 Extracting text from image..."):
-                response = client.chat.completions.create(
+                response = openai_client.chat.completions.create(
                     model="gpt-3.5-turbo",
                     messages=[
                         {"role": "system", "content": "You are an AI that extracts and summarizes text from images."},
