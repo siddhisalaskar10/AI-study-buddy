@@ -134,31 +134,32 @@ elif menu=="📝 Quiz":
 
 # ----------------- 📸 SCAN PHOTO (AI OCR + Summarize) -----------------
 elif menu=="📸 Scan Photo":
-    st.subheader("📸 Scan Photo")
-    up = st.file_uploader("Upload an image (notes, book page, or document):", type=["jpg", "png", "jpeg"])
+    st.subheader("📸 Scan Photo (AI OCR + Summarize)")
+    up = st.file_uploader("Upload an image (notes, document, or textbook page):", type=["jpg", "png", "jpeg"])
 
     if up:
         # Display uploaded image
         img = Image.open(up)
         st.image(img, caption="Uploaded Image", use_container_width=True)
 
-        # Convert image to base64 for API
-        img_bytes = io.BytesIO()
-        img.save(img_bytes, format="PNG")
-        img_b64 = base64.b64encode(img_bytes.getvalue()).decode()
+        try:
+            # Use OpenAI Vision model directly
+            st.info("🔍 Extracting text using GPT-4o-mini (Vision)...")
+            response = client.chat.completions.create(
+                model="gpt-4o-mini",  # Vision model
+                messages=[
+                    {"role": "system", "content": "You are an OCR AI that extracts text and summarizes content."},
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": "Extract all text from this image. Return only text."},
+                            {"type": "image", "image": up.getvalue()},
+                        ],
+                    },
+                ],
+            )
 
-        # Build prompt for text extraction
-        extract_prompt = f"""
-        You are an OCR AI. Read the following base64-encoded image carefully.
-        Extract all text accurately and return ONLY the text — no comments, no formatting.
-        Base64 image:
-        {img_b64}
-        """
-
-        with st.spinner("🔍 Extracting text from image..."):
-            extracted_text = ask_openai(extract_prompt)
-
-        if extracted_text and not extracted_text.startswith("⚠️"):
+            extracted_text = response.choices[0].message.content.strip()
             st.text_area("📝 Extracted Text:", extracted_text, height=200)
 
             if st.button("✨ Summarize or Explain Text"):
@@ -167,12 +168,11 @@ elif menu=="📸 Scan Photo":
                     summary = ask_openai(summary_prompt)
                     st.markdown("### 📘 Summary / Explanation")
                     st.write(summary)
-
-                    # Optional: Text-to-speech (if speak_text function available)
                     if 'speak_text' in globals():
                         st.audio(speak_text(summary))
-        else:
-            st.warning("⚠️ Could not extract text. Try another image or check image clarity.")
+
+        except Exception as e:
+            st.error(f"⚠️ OpenAI API error: {e}")
 
 # --------------- FLASHCARDS ---------------
 elif menu=="💡 Flashcards":
