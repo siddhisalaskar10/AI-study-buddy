@@ -6,7 +6,7 @@ import os, time, json5, tempfile, re, io, base64, random
 from googleapiclient.discovery import build
 from PIL import Image
 import pytesseract
-pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"  # Windows path
+pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR"
 
 from gtts import gTTS
 import speech_recognition as sr
