@@ -193,16 +193,17 @@ elif menu=="📸 Scan Photo":
         img = Image.open(up)
         st.image(img, caption="Uploaded Image", width=350)
 
-        # --- Use Tesseract OCR locally ---
-        try:
-            import pytesseract
-            text = pytesseract.image_to_string(img)
-            if not text.strip():
-                st.warning("⚠️ No text detected by OCR. Try a clearer image.")
-            st.text_area("📝 Extracted Text:", text, height=180)
-        except ImportError:
-            st.warning("⚠️ pytesseract not installed. Install via `pip install pytesseract`.")
-            text = ""
+       try:
+    # Try Tesseract first
+    text = pytesseract.image_to_string(img)
+except pytesseract.TesseractNotFoundError:
+    st.warning("⚠️ Tesseract not found. Using GPT-based OCR fallback...")
+    import io, base64
+    img_bytes = io.BytesIO()
+    img.save(img_bytes, format="PNG")
+    img_b64 = base64.b64encode(img_bytes.getvalue()).decode()
+    prompt = f"Extract all text from this base64 image:\n{img_b64}"
+    text = ask_ai(prompt)
 
         # --- Summarization / Explanation ---
         if text.strip():
