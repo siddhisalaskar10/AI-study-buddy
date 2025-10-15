@@ -1,14 +1,18 @@
 import streamlit as st
 from openai import OpenAI
-import os, json5, tempfile, re, io, base64
+import google.generativeai as genai
+from groq import Groq
+import os, time, json5, tempfile, re, io, base64
 from googleapiclient.discovery import build
 from PIL import Image
 from gtts import gTTS
 import speech_recognition as sr
 from pydub import AudioSegment
 
-# ✅ Initialize OpenAI client (safe for both local and deployed apps)
-client = OpenAI(api_key=st.secrets.get("OPENAI_API_KEY", os.getenv("OPENAI_API_KEY")))
+# --- Initialize clients ---
+openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY", st.secrets.get("OPENAI_API_KEY")))
+genai.configure(api_key=os.getenv("GEMINI_API_KEY", st.secrets.get("GEMINI_API_KEY")))
+groq_client = Groq(api_key=os.getenv("GROQ_API_KEY", st.secrets.get("GROQ_API_KEY")))
 
 # --------------- CONFIG ---------------
 api_key = os.getenv("OPENAI_API_KEY")
@@ -17,6 +21,47 @@ if not api_key:
 openai = OpenAI(api_key=api_key)
 
 YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY", "YOUR_KEY_HERE")
+
+# --- Universal AI call ---
+def ask_ai(prompt, max_tokens=600):
+    """
+    Try OpenAI first → fallback to Gemini → then Groq (Llama 3).
+    Works even if one or more APIs are out of quota.
+    """
+    # Try OpenAI (primary)
+    try:
+        response = openai_client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=max_tokens
+        )
+        return response.choices[0].message.content.strip()
+
+    except Exception as e:
+        error = str(e)
+        if "insufficient_quota" in error or "rate_limit" in error:
+            st.warning("⚠️ OpenAI quota reached — switching to free backup model...")
+        else:
+            st.warning(f"⚠️ OpenAI error: {e}")
+    
+    # Try Gemini (backup)
+    try:
+        model = genai.GenerativeModel("gemini-1.5-flash")
+        response = model.generate_content(prompt)
+        return response.text.strip()
+    except Exception as e:
+        st.warning(f"⚠️ Gemini backup failed: {e}")
+
+    # Try Groq (Llama 3, free tier)
+    try:
+        completion = groq_client.chat.completions.create(
+            model="llama3-8b-8192",
+            messages=[{"role": "user", "content": prompt}]
+        )
+        return completion.choices[0].message.content.strip()
+    except Exception as e:
+        st.error(f"❌ All AI services failed: {e}")
+        return "AI service unavailable. Please try again later."
 
 # --------------- UTILITIES ---------------
 def ask_openai(prompt, max_tokens=600):
@@ -187,7 +232,7 @@ elif menu=="📸 Scan Photo":
             # --- Summarization / Explanation ---
             if st.button("✨ Summarize / Explain"):
                 with st.spinner("🧠 Summarizing the extracted content..."):
-                    summary = ask_openai(f"Summarize or explain this text in simple terms:\n{text}")
+                    summary = ask_ai(f"Summarize or explain this text in simple terms:\n{text}")
                     st.write("### 📘 Summary / Explanation:")
                     st.write(summary)
 
@@ -203,7 +248,7 @@ elif menu=="💡 Flashcards":
     topic=st.text_input("Topic:")
     n=st.slider("How many flashcards?",1,10,5)
     if st.button("Generate Flashcards"):
-        cards=ask_openai(f"Create {n} flashcards to revise {topic}. Each should have a term and definition.")
+        cards=ask_ai(f"Create {n} flashcards to revise {topic}. Each should have a term and definition.")
         st.write(cards)
 
 # --------------- YOUTUBE ---------------
@@ -243,7 +288,7 @@ elif menu=="🎧 Voice Assistant":
         try:
             q=r.recognize_google(audio)
             st.write(f"🗣 You said: {q}")
-            ans=ask_openai(q)
+            ans=ask_ai(q)
             st.write("🤖",ans)
             st.audio(speak_text(ans))
         except Exception as e: st.error(f"Voice error: {e}")
