@@ -5,6 +5,7 @@ from groq import Groq
 import os, time, json5, tempfile, re, io, base64
 from googleapiclient.discovery import build
 from PIL import Image
+import pytesseract
 from gtts import gTTS
 import speech_recognition as sr
 from pydub import AudioSegment
@@ -180,7 +181,7 @@ elif menu=="📝 Quiz":
                     st.error(f"❌ Correct answer: {correct}")
                     st.audio(speak_text(f"The correct answer is {correct}"))
 
-# ----------------- SCAN PHOTO (with GPT-based OCR + Summarizer) -----------------
+# ----------------- SCAN PHOTO (OCR + Summarizer) -----------------
 elif menu=="📸 Scan Photo":
     st.subheader("📸 Scan and Summarize Notes")
 
@@ -190,57 +191,31 @@ elif menu=="📸 Scan Photo":
         img = Image.open(up)
         st.image(img, caption="Uploaded Image", width=350)
 
-        # --- Read image bytes ---
-        img_bytes = up.read()
-
-        # --- Compress if too large (>1 MB) ---
-        if len(img_bytes) > 1_000_000:
-            img = img.resize((800, int(800 * img.height / img.width)))
-            buffer = io.BytesIO()
-            img.save(buffer, format="PNG")
-            img_bytes = buffer.getvalue()
-
-        # --- Convert to Base64 for GPT processing ---
-        img_b64 = base64.b64encode(img_bytes).decode()
-
-        # --- Prepare prompt ---
-        prompt = f"""
-        You are an AI assistant that extracts readable text from an image (OCR).
-        Below is the image encoded in Base64. Extract all visible text clearly and accurately.
-        Return only the extracted text — no explanations, no formatting, no markdown.
-
-        Base64 image:
-        {img_b64}
-        """
-
-        # --- Process image using GPT-3.5 (more affordable & stable) ---
+        # --- Use Tesseract OCR locally ---
         try:
-            with st.spinner("🔍 Extracting text from image..."):
-                response = openai_client.chat.completions.create(
-                    model="gpt-3.5-turbo",
-                    messages=[
-                        {"role": "system", "content": "You are an AI that extracts and summarizes text from images."},
-                        {"role": "user", "content": prompt}
-                    ],
-                    max_tokens=1500,
-                )
-
-            # --- Extracted text ---
-            text = response.choices[0].message.content.strip()
+            import pytesseract
+            text = pytesseract.image_to_string(img)
+            if not text.strip():
+                st.warning("⚠️ No text detected by OCR. Try a clearer image.")
             st.text_area("📝 Extracted Text:", text, height=180)
+        except ImportError:
+            st.warning("⚠️ pytesseract not installed. Install via `pip install pytesseract`.")
+            text = ""
 
-            # --- Summarization / Explanation ---
+        # --- Summarization / Explanation ---
+        if text.strip():
             if st.button("✨ Summarize / Explain"):
                 with st.spinner("🧠 Summarizing the extracted content..."):
-                    summary = ask_ai(f"Summarize or explain this text in simple terms:\n{text}")
+                    # truncate long text to avoid token issues
+                    text_to_summarize = text[:4000]
+                    summary = ask_ai(f"Summarize or explain this text in simple terms:\n{text_to_summarize}")
+                    
                     st.write("### 📘 Summary / Explanation:")
                     st.write(summary)
 
-                    # --- Optional: Audio output ---
-                    st.audio(speak_text(summary))
-
-        except Exception as e:
-            st.error(f"⚠️ OpenAI API error: {e}")
+                    # --- Audio output ---
+                    audio_path = speak_text(summary)
+                    st.audio(audio_path)
 
 # --------------- FLASHCARDS ---------------
 elif menu=="💡 Flashcards":
